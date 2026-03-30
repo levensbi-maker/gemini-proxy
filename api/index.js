@@ -5,11 +5,13 @@ const TARGET = atob(_0xBase);
 
 export default async function handler(req) {
   const url = new URL(req.url);
+
+  // Умный поиск начала пути API Gemini
+  const regex = /\/v1(beta|alpha)?\//;
+  const match = url.pathname.match(regex);
+  const path = match ? url.pathname.substring(match.index) : url.pathname;
   
-  // Ответ для проверки в браузере
-  if (req.method === "GET" && url.pathname.endsWith("/api/proxy")) {
-    return new Response("System Online", { status: 200 });
-  }
+  const targetUrl = new URL(path + url.search, TARGET);
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -20,10 +22,6 @@ export default async function handler(req) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    const path = url.pathname.replace("/api/proxy", "");
-    const targetUrl = new URL(path + url.search, TARGET);
-
-    // ОЧИСТКА ЗАГОЛОВКОВ (Важно для Vercel!)
     const filteredHeaders = new Headers(req.headers);
     filteredHeaders.delete("host");
     filteredHeaders.delete("origin");
@@ -42,9 +40,6 @@ export default async function handler(req) {
 
     return new Response(res.body, { status: res.status, headers: outHeaders });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { 
-      status: 500, 
-      headers: { ...corsHeaders, "Content-Type": "application/json" } 
-    });
+    return new Response(e.message, { status: 500, headers: corsHeaders });
   }
 }
