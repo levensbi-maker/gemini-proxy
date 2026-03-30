@@ -1,34 +1,39 @@
-// Тот же фокус с Base64, чтобы не палиться
+export const config = { runtime: 'edge' };
+
 const _0xBase = "aHR0cHM6Ly9nZW5lcmF0aXZlbGFuZ3VhZ2UuZ29vZ2xlYXBpcy5jb20=";
 const TARGET = atob(_0xBase);
-
-export const config = { runtime: 'edge' }; // Это делает его сверхбыстрым!
 
 export default async function handler(req) {
   const url = new URL(req.url);
   
-  // Если зайти просто браузером
-  if (url.pathname === "/api/proxy" && req.method === "GET") {
+  // Ответ для проверки в браузере
+  if (req.method === "GET" && url.pathname.endsWith("/api/proxy")) {
     return new Response("System Online", { status: 200 });
   }
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "*",
   };
 
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    // Vercel обрезает /api/proxy, нам нужно достучаться до Google
     const path = url.pathname.replace("/api/proxy", "");
     const targetUrl = new URL(path + url.search, TARGET);
 
+    // ОЧИСТКА ЗАГОЛОВКОВ (Важно для Vercel!)
+    const filteredHeaders = new Headers(req.headers);
+    filteredHeaders.delete("host");
+    filteredHeaders.delete("origin");
+    filteredHeaders.delete("referer");
+
     const res = await fetch(targetUrl, {
       method: req.method,
-      headers: req.headers,
-      body: req.body,
+      headers: filteredHeaders,
+      body: req.method === "POST" ? req.body : null,
+      redirect: "follow",
     });
 
     const outHeaders = new Headers(res.headers);
@@ -37,7 +42,9 @@ export default async function handler(req) {
 
     return new Response(res.body, { status: res.status, headers: outHeaders });
   } catch (e) {
-    return new Response("Error", { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: e.message }), { 
+      status: 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 }
-
