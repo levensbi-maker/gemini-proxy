@@ -6,7 +6,7 @@ const TARGET = atob(_0xB);
 export default async function handler(req) {
   const url = new URL(req.url);
   
-  // Хакерский поиск пути для Gemini
+  // Вырезаем хвост для Google (v1beta/...)
   const regex = /\/v1(beta|alpha)?\//;
   const match = url.pathname.match(regex);
   const path = match ? url.pathname.substring(match.index) : url.pathname;
@@ -25,11 +25,12 @@ export default async function handler(req) {
     const h = new Headers(req.headers);
     h.delete("host"); h.delete("origin"); h.delete("referer");
 
+    // Для Edge-функций используем простую пересылку тела
     const res = await fetch(targetUrl, {
       method: req.method,
       headers: h,
-      body: req.method === "POST" ? await req.blob() : null,
-      redirect: "follow",
+      body: req.method === "POST" ? req.body : null,
+      duplex: 'half' // Это важно для потоковой передачи в Vercel
     });
 
     const outH = new Headers(res.headers);
@@ -38,6 +39,6 @@ export default async function handler(req) {
 
     return new Response(res.body, { status: res.status, headers: outH });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: cors });
+    return new Response(e.message, { status: 500, headers: cors });
   }
 }
